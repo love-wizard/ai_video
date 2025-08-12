@@ -7,9 +7,9 @@ class TextAnalyzer:
     """文本分析服务，使用OpenAI API理解用户需求"""
     
     def __init__(self):
-        self.api_key = os.environ.get('OPENAI_API_KEY')
+        self.api_key = 'sk-bf1f6425fedc4b31beb0dc5b7075307a' # os.environ.get('OPENAI_API_KEY')
         if self.api_key:
-            openai.api_key = self.api_key
+            self.api_base = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
         else:
             print("警告: 未设置OPENAI_API_KEY环境变量")
         
@@ -72,8 +72,11 @@ class TextAnalyzer:
         try:
             prompt = self._build_analysis_prompt(text, sport_type)
             
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+            # 使用新版本的OpenAI API接口，处理可能的代理问题
+
+            client = openai.OpenAI(api_key=self.api_key, base_url=self.api_base)
+            response = client.chat.completions.create(
+                model="deepseek-v3",
                 messages=[
                     {"role": "system", "content": "你是一个专业的运动视频剪辑助手，能够理解用户的剪辑需求并制定相应的剪辑策略。"},
                     {"role": "user", "content": prompt}
@@ -83,6 +86,7 @@ class TextAnalyzer:
             )
             
             result = response.choices[0].message.content
+            print('大模型结果：'+ result)
             return self._parse_openai_response(result, sport_type)
             
         except Exception as e:

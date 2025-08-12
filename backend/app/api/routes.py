@@ -168,23 +168,43 @@ def request_clip(video_id):
             except Exception as e:
                 print(f"更新剪辑状态失败: {e}")
             
-            # 文本分析
-            text_analyzer = TextAnalyzer()
-            analysis_result = text_analyzer.analyze_clip_request(
-                data['text'], 
-                video.sport_type
-            )
-            
-            # 精彩瞬间检测
-            moviepy_editor = MoviePyEditor()
-            highlight_segments = moviepy_editor.detect_highlight_moments(
-                video.filepath, 
-                video.sport_type
-            )
+            # 在后台线程中重新查询视频对象
+            try:
+                with app.app_context():
+                    video_obj = Video.query.get(video_id)
+                    if not video_obj:
+                        print(f"视频 {video_id} 不存在")
+                        return
+                    
+                    # 文本分析
+                    text_analyzer = TextAnalyzer()
+                    analysis_result = text_analyzer.analyze_clip_request(
+                        data['text'], 
+                        video_obj.sport_type
+                    )
+                    
+                    print(f"AI分析结果: {analysis_result}")
+                    
+                    # 根据AI分析结果调整剪辑策略
+                    clip_target = analysis_result.get('clip_target', 'highlights')
+                    focus_moments = analysis_result.get('focus_moments', [])
+                    clip_style = analysis_result.get('clip_style', '标准剪辑')
+                    
+                    # 精彩瞬间检测 - 使用AI分析结果指导
+                    moviepy_editor = MoviePyEditor()
+                    highlight_segments = moviepy_editor.detect_highlight_moments(
+                        video_obj.filepath, 
+                        video_obj.sport_type,
+                        clip_target=clip_target,
+                        focus_moments=focus_moments
+                    )
+            except Exception as e:
+                print(f"查询视频对象失败: {e}")
+                return
             
             if not highlight_segments:
                 # 如果没有检测到精彩瞬间，使用均匀分布
-                video_duration = video.duration or 60
+                video_duration = video_obj.duration or 60
                 segment_count = 5
                 segment_duration = min(8, video_duration / segment_count)
                 highlight_segments = []
@@ -194,7 +214,7 @@ def request_clip(video_id):
                     highlight_segments.append((start, end))
             
             # 创建输出目录
-            output_dir = 'storage/results'
+            output_dir = os.path.join(os.getcwd(), 'storage', 'results')
             os.makedirs(output_dir, exist_ok=True)
             
             # 生成输出文件名
@@ -203,7 +223,7 @@ def request_clip(video_id):
             
             # 执行视频剪辑
             success = moviepy_editor.create_highlight_video(
-                video.filepath,
+                video_obj.filepath,
                 highlight_segments,
                 output_path,
                 clip_request.target_duration

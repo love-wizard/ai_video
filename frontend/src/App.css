@@ -481,12 +481,8 @@
   right: 0;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   padding: 1rem;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.video-container:hover .video-controls {
   opacity: 1;
+  transition: opacity 0.3s ease;
 }
 
 .controls-top {

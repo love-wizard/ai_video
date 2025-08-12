@@ -17,6 +17,8 @@ interface ClipRequest {
   sportType: string;
   targetDuration: number;
   status: 'pending' | 'processing' | 'completed' | 'error';
+  resultPath?: string;
+  downloadUrl?: string;
 }
 
 const App: React.FC = () => {
@@ -31,7 +33,12 @@ const App: React.FC = () => {
     setCurrentStep('describe');
   }, []);
 
-  const handleClipRequest = useCallback((text: string, sportType: string, targetDuration: number) => {
+  const handleClipRequest = useCallback(async (text: string, sportType: string, targetDuration: number) => {
+    if (!currentVideo) {
+      alert('请先上传视频文件');
+      return;
+    }
+
     const newRequest: ClipRequest = {
       id: Date.now().toString(),
       text,
@@ -44,29 +51,95 @@ const App: React.FC = () => {
     setCurrentStep('process');
     setIsProcessing(true);
     
-    // 模拟处理过程
-    setTimeout(() => {
+    try {
+      // 调用后端剪辑API
+      const response = await fetch(`/api/videos/${currentVideo.id}/clip`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          sportType: sportType,
+          targetDuration: targetDuration
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`剪辑请求失败: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('剪辑请求提交成功:', result);
+
+      // 更新状态为处理中
       setClipRequests(prev => 
         prev.map(req => 
           req.id === newRequest.id 
-            ? { ...req, status: 'processing' }
+            ? { ...req, status: 'processing', id: result.clipId }
             : req
         )
       );
-      
-      setTimeout(() => {
-        setClipRequests(prev => 
-          prev.map(req => 
-            req.id === newRequest.id 
-              ? { ...req, status: 'completed' }
-              : req
-          )
-        );
-        setIsProcessing(false);
-        setCurrentStep('complete');
-      }, 5000);
-    }, 1000);
-  }, []);
+
+      // 轮询检查剪辑状态
+      const checkStatus = async () => {
+        try {
+          const statusResponse = await fetch(`/api/videos/${currentVideo.id}/clip/${result.clipId}`);
+          if (statusResponse.ok) {
+            const statusResult = await statusResponse.json();
+            console.log('剪辑状态:', statusResult);
+
+            if (statusResult.status === 'completed') {
+              // 剪辑完成
+              setClipRequests(prev => 
+                prev.map(req => 
+                  req.id === result.clipId 
+                    ? { ...req, status: 'completed', resultPath: statusResult.downloadUrl }
+                    : req
+                )
+              );
+              setIsProcessing(false);
+              setCurrentStep('complete');
+              return;
+            } else if (statusResult.status === 'error') {
+              // 剪辑失败
+              setClipRequests(prev => 
+                prev.map(req => 
+                  req.id === result.clipId 
+                    ? { ...req, status: 'error' }
+                    : req
+                )
+              );
+              setIsProcessing(false);
+              alert('视频剪辑失败，请重试');
+              return;
+            }
+
+            // 继续轮询
+            setTimeout(checkStatus, 2000);
+          }
+        } catch (error) {
+          console.error('检查状态失败:', error);
+          setTimeout(checkStatus, 2000);
+        }
+      };
+
+      // 开始轮询
+      setTimeout(checkStatus, 2000);
+
+    } catch (error) {
+      console.error('剪辑请求失败:', error);
+      setClipRequests(prev => 
+        prev.map(req => 
+          req.id === newRequest.id 
+            ? { ...req, status: 'error' }
+            : req
+        )
+      );
+      setIsProcessing(false);
+      alert(`剪辑请求失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [currentVideo]);
 
   const handleReset = useCallback(() => {
     setCurrentVideo(null);
@@ -81,6 +154,72 @@ const App: React.FC = () => {
     setCurrentStep('upload');
     setIsProcessing(false);
   }, []);
+
+  const handleDownloadClip = useCallback(async (clipRequest: ClipRequest) => {
+    try {
+      if (!currentVideo) {
+        console.error('没有当前视频');
+        return;
+      }
+
+      // 调用后端下载API
+      const response = await fetch(`/api/videos/${currentVideo.id}/clip/${clipRequest.id}/file`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.statusText}`);
+      }
+
+      // 检查内容类型
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('video/')) {
+        console.warn('下载的内容不是视频文件:', contentType);
+      }
+
+      // 获取文件名
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = 'clipped_video.mp4';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // 创建下载链接
+      const blob = await response.blob();
+      
+      // 验证文件大小
+      if (blob.size < 1024) {
+        throw new Error('下载的文件太小，可能有问题');
+      }
+
+      // 验证文件类型
+      if (!blob.type.includes('video/') && !filename.endsWith('.mp4')) {
+        console.warn('文件类型可能不正确:', blob.type);
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      console.log('下载成功:', filename, '大小:', blob.size, '类型:', blob.type);
+      
+      // 显示成功消息
+      alert(`下载成功！\n文件名: ${filename}\n文件大小: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+      
+    } catch (error) {
+      console.error('下载失败:', error);
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      alert(`下载失败: ${errorMessage}\n请检查后端服务是否正常运行`);
+    }
+  }, [currentVideo]);
 
   const getCurrentClipRequest = () => {
     return clipRequests[clipRequests.length - 1];
@@ -178,7 +317,11 @@ const App: React.FC = () => {
               </div>
               
               <div className="completion-actions">
-                <button className="button success">
+                <button 
+                  className="button success"
+                  onClick={() => handleDownloadClip(completedRequest)}
+                  disabled={completedRequest?.status !== 'completed'}
+                >
                   📥 下载剪辑结果
                 </button>
                 <button className="button secondary" onClick={handleNewVideo}>

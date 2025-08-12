@@ -43,7 +43,7 @@ const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUploaded }) => {
         });
       }, 200);
 
-      const response = await fetch('http://localhost:5000/api/videos/upload', {
+      const response = await fetch('/api/videos/upload', {
         method: 'POST',
         body: formData,
       });

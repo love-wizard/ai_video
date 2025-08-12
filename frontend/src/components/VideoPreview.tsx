@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface VideoPreviewProps {
   videoFile?: File | null;
@@ -22,6 +22,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const videoUrlRef = useRef<string>('');
 
   useEffect(() => {
     const video = videoRef.current;
@@ -67,6 +68,20 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
       }
     };
   }, [showControls]);
+
+  // 处理视频文件URL，避免重复创建
+  useEffect(() => {
+    if (videoFile && !videoUrlRef.current) {
+      videoUrlRef.current = URL.createObjectURL(videoFile);
+    }
+    
+    return () => {
+      if (videoUrlRef.current) {
+        URL.revokeObjectURL(videoUrlRef.current);
+        videoUrlRef.current = '';
+      }
+    };
+  }, [videoFile]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -140,9 +155,21 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const handleMouseMove = () => {
-    setShowControls(true);
-  };
+  const handleMouseMove = useCallback(() => {
+    if (!showControls) {
+      setShowControls(true);
+    }
+  }, [showControls]);
+
+  // 防抖处理鼠标移动事件
+  const debouncedMouseMove = useCallback(() => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+      handleMouseMove();
+    }, 100); // 100ms防抖
+  }, [handleMouseMove]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -181,8 +208,8 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
         <video
           ref={videoRef}
           className="video-player"
-          src={videoUrl || (videoFile ? URL.createObjectURL(videoFile) : '')}
-          onMouseMove={handleMouseMove}
+          src={videoUrl || videoUrlRef.current}
+          onMouseMove={debouncedMouseMove}
           onMouseLeave={() => setShowControls(false)}
         />
         

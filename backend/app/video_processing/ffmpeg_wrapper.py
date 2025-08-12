@@ -61,6 +61,11 @@ class FFmpegWrapper:
             
             # 解析输出获取视频信息
             info = self._parse_video_info(result.stderr)
+            
+            # 获取文件大小
+            if os.path.exists(video_path):
+                info['size'] = os.path.getsize(video_path)
+            
             return info
             
         except Exception as e:
@@ -127,10 +132,6 @@ class FFmpegWrapper:
                         if part in ['h264', 'h265', 'av1', 'vp9']:
                             info['codec'] = part
                             break
-            
-            # 获取文件大小
-            if os.path.exists(video_path):
-                info['size'] = os.path.getsize(video_path)
                 
         except Exception as e:
             print(f"解析视频信息失败: {e}")
