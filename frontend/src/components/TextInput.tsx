@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 
-interface TextInputProps {}
+interface TextInputProps {
+  onClipRequest?: (text: string, sportType: string, targetDuration: number) => void;
+  disabled?: boolean;
+}
 
-const TextInput: React.FC<TextInputProps> = () => {
+const TextInput: React.FC<TextInputProps> = ({ onClipRequest, disabled = false }) => {
   const [text, setText] = useState('');
   const [sportType, setSportType] = useState('auto');
   const [targetDuration, setTargetDuration] = useState(60);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const presetTemplates = [
     '帮我剪出高亮瞬间并合成视频，总长度在1分钟内',
@@ -17,54 +22,79 @@ const TextInput: React.FC<TextInputProps> = () => {
 
   const handleSubmit = async () => {
     if (!text.trim()) {
-      alert('请输入剪辑需求描述');
+      setErrorMessage('请输入剪辑需求描述');
       return;
     }
 
-    // TODO: 发送剪辑请求到后端
-    console.log('发送剪辑请求:', {
-      text,
-      sportType,
-      targetDuration
-    });
+    if (text.length < 10) {
+      setErrorMessage('描述至少需要10个字符');
+      return;
+    }
+
+    setErrorMessage('');
+    setIsSubmitting(true);
+
+    try {
+      // 模拟API调用延迟
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (onClipRequest) {
+        onClipRequest(text, sportType, targetDuration);
+      }
+      
+      // 清空表单
+      setText('');
+      setSportType('auto');
+      setTargetDuration(60);
+      
+    } catch (error) {
+      setErrorMessage('提交失败，请重试');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleTemplateSelect = (template: string) => {
     setText(template);
+    setErrorMessage('');
   };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    if (errorMessage) {
+      setErrorMessage('');
+    }
+  };
+
+  const characterCount = text.length;
+  const isTextValid = text.length >= 10;
 
   return (
     <div className="component-container">
-      <h2 className="component-title">剪辑需求描述</h2>
+      <h2 className="component-title">✂️ 剪辑需求描述</h2>
       
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'left' }}>
-          运动类型：
+      <div className="form-group">
+        <label className="form-label">
+          🏃 运动类型：
         </label>
         <select 
           value={sportType} 
           onChange={(e) => setSportType(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '0.5rem',
-            borderRadius: '5px',
-            border: 'none',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            color: '#333'
-          }}
+          className="form-select"
+          disabled={disabled}
         >
-          <option value="auto">自动识别</option>
-          <option value="basketball">篮球</option>
-          <option value="football">足球</option>
-          <option value="tennis">网球</option>
-          <option value="swimming">游泳</option>
-          <option value="athletics">田径</option>
+          <option value="auto">🤖 自动识别</option>
+          <option value="basketball">🏀 篮球</option>
+          <option value="football">⚽ 足球</option>
+          <option value="tennis">🎾 网球</option>
+          <option value="swimming">🏊 游泳</option>
+          <option value="athletics">🏃 田径</option>
         </select>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'left' }}>
-          目标时长（秒）：
+      <div className="form-group">
+        <label className="form-label">
+          ⏱️ 目标时长（秒）：
         </label>
         <input
           type="number"
@@ -72,45 +102,44 @@ const TextInput: React.FC<TextInputProps> = () => {
           onChange={(e) => setTargetDuration(Number(e.target.value))}
           min="10"
           max="300"
-          style={{
-            width: '100%',
-            padding: '0.5rem',
-            borderRadius: '5px',
-            border: 'none',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            color: '#333'
-          }}
+          className="form-input"
+          disabled={disabled}
         />
+        <small className="form-hint">建议时长：10-300秒</small>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', textAlign: 'left' }}>
-          剪辑需求描述：
+      <div className="form-group">
+        <label className="form-label">
+          📝 剪辑需求描述：
         </label>
         <textarea
-          className="text-input"
+          className={`form-textarea ${!isTextValid && text.length > 0 ? 'error' : ''}`}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="请描述您希望如何剪辑这个视频..."
+          onChange={handleTextChange}
+          placeholder="请详细描述您希望如何剪辑这个视频..."
+          disabled={disabled}
+          rows={4}
         />
+        <div className="character-count">
+          <span className={isTextValid ? 'valid' : 'invalid'}>
+            {characterCount}/10
+          </span>
+          {!isTextValid && text.length > 0 && (
+            <span className="validation-message">描述至少需要10个字符</span>
+          )}
+        </div>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <p style={{ marginBottom: '0.5rem', textAlign: 'left' }}>快速模板：</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+      <div className="form-group">
+        <label className="form-label">🚀 快速模板：</label>
+        <div className="template-buttons">
           {presetTemplates.map((template, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => handleTemplateSelect(template)}
-              style={{
-                padding: '0.5rem 1rem',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                borderRadius: '20px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
+              className="template-button"
+              disabled={disabled}
             >
               {template}
             </button>
@@ -118,12 +147,18 @@ const TextInput: React.FC<TextInputProps> = () => {
         </div>
       </div>
 
+      {errorMessage && (
+        <div className="error-message">
+          ❌ {errorMessage}
+        </div>
+      )}
+
       <button 
         className="button" 
         onClick={handleSubmit}
-        disabled={!text.trim()}
+        disabled={!text.trim() || !isTextValid || isSubmitting || disabled}
       >
-        开始剪辑
+        {isSubmitting ? '⏳ 提交中...' : '🎬 开始剪辑'}
       </button>
     </div>
   );

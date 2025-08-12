@@ -2,18 +2,16 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import os
+from config import config
 
 db = SQLAlchemy()
 
-def create_app():
+def create_app(config_name='default'):
     app = Flask(__name__)
     
-    # 配置
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-        'DATABASE_URL', 'sqlite:///video_editing.db'
-    )
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # 加载配置
+    app.config.from_object(config[config_name])
+    config[config_name].init_app(app)
     
     # 初始化扩展
     db.init_app(app)
@@ -21,6 +19,8 @@ def create_app():
     
     # 注册蓝图
     from .api import videos_bp
+    from .api.routes import health_bp
+    app.register_blueprint(health_bp)
     app.register_blueprint(videos_bp, url_prefix='/api/videos')
     
     # 创建数据库表

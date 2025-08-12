@@ -33,3 +33,4 @@ class ClipRequest(db.Model):
     
     def __repr__(self):
         return f'<ClipRequest {self.id}>'
+
