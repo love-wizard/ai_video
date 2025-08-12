@@ -94,7 +94,7 @@ const App: React.FC = () => {
               setClipRequests(prev => 
                 prev.map(req => 
                   req.id === result.clipId 
-                    ? { ...req, status: 'completed', resultPath: statusResult.downloadUrl }
+                    ? { ...req, status: 'completed', downloadUrl: statusResult.previewUrl }
                     : req
                 )
               );
@@ -283,15 +283,8 @@ const App: React.FC = () => {
         return (
           <>
             <VideoPreview 
-              videoFile={currentVideo?.file}
-              onVideoSelected={(file) => {
-                const videoData: VideoData = { 
-                  id: Date.now().toString(), 
-                  filename: file.name, 
-                  file 
-                };
-                setCurrentVideo(videoData);
-              }}
+              videoFile={null}
+              videoUrl={completedRequest?.downloadUrl}
             />
             <div className="component-container">
               <h2 className="component-title">🎉 剪辑完成！</h2>

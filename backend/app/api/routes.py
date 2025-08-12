@@ -292,7 +292,8 @@ def get_clip_result(video_id, clip_id):
     return jsonify({
         'clipId': clip_request.id,
         'status': 'completed',
-        'downloadUrl': f'/download/{clip_request.result_path}',
+        'downloadUrl': f'/api/videos/{video_id}/clip/{clip_id}/file',
+        'previewUrl': f'/api/videos/{video_id}/clip/{clip_id}/preview',
         'message': '剪辑完成'
     })
 
@@ -331,6 +332,27 @@ def download_clip(video_id, clip_id):
         'downloadUrl': f'/api/videos/{video_id}/clip/{clip_id}/file',
         'filename': os.path.basename(clip_request.result_path)
     })
+
+@videos_bp.route('/<video_id>/clip/<clip_id>/preview', methods=['GET'])
+def preview_clip(video_id, clip_id):
+    """提供剪辑文件预览"""
+    from flask import send_file
+    
+    clip_request = ClipRequest.query.get(clip_id)
+    if not clip_request or clip_request.video_id != video_id:
+        return jsonify({'error': '剪辑请求不存在'}), 404
+    
+    if clip_request.status != 'completed':
+        return jsonify({'error': '剪辑尚未完成'}), 400
+    
+    if not clip_request.result_path or not os.path.exists(clip_request.result_path):
+        return jsonify({'error': '文件不存在'}), 404
+    
+    return send_file(
+        clip_request.result_path,
+        as_attachment=False,
+        mimetype='video/mp4'
+    )
 
 @videos_bp.route('/<video_id>/clip/<clip_id>/file', methods=['GET'])
 def serve_clip_file(video_id, clip_id):
